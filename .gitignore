@@ -5,3 +5,5 @@
 *.tar.gz
 build.sh
 compose.yml
+data
+.env
