@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import shutil
 import sys
 import datetime
 import platform
@@ -121,6 +121,10 @@ texts = {
         'en': 'Do you want the latest version of Docker to be automatically installed for you?',
         'zh': '是否需要为你自动安装 Docker 的最新版本'
     },
+    'if-restart-docker': {
+        'en': 'Do you want to restart SafeLine WAF Docker container',
+        'zh': '是否需要重启雷池 WAF 的容器'
+    },
     'if-update-docker': {
         'en': 'Do you want to update your Docker version?',
         'zh': '是否需要为你自动更新 Docker 版本'
@@ -165,10 +169,6 @@ texts = {
         'en': 'Failed to download docker compose script',
         'zh': '下载 docker compose 脚本失败'
     },
-    'fail-to-download-reset-tengine': {
-        'en': 'Failed to download reset_tengine script',
-        'zh': '下载 reset_tengine 脚本失败'
-    },
     'fail-to-create-dir': {
         'en': 'Unable to create the "%s" directory',
         'zh': '无法创建 "%s" 目录'
@@ -209,6 +209,10 @@ texts = {
         'en': 'Failed to start Docker containers',
         'zh': '启动 Docker 容器失败'
     },
+    'fail-to-down': {
+        'en': 'Failed to stop Docker containers',
+        'zh': '停止 Docker 容器失败'
+    },
     'install-finish': {
         'en': 'SafeLine WAF installation completed',
         'zh': '雷池 WAF 安装完成'
@@ -229,8 +233,12 @@ texts = {
         'en': 'REPAIR',
         'zh': '修复'
     },
+    'uninstall': {
+        'en': 'UNINSTALL',
+        'zh': '卸载'
+    },
     'upgrade': {
-        'en': 'UPDRADE',
+        'en': 'UPGRADE',
         'zh': '升级'
     },
     'backup': {
@@ -284,8 +292,99 @@ texts = {
     'docker-up-iptables-failed': {
         'en': 'Iptables policy error, try to restart docker',
         'zh': 'iptables 规则错误，尝试重启 docker'
+    },
+    'install-channel': {
+        'en': 'Installing',
+        'zh': '安装通道'
+    },
+    'preview-release': {
+        'en': 'Preview',
+        'zh': '预览版'
+    },
+    'lts-release': {
+        'en': 'LTS',
+        'zh': 'LTS 版'
+    },
+    'fail-to-docker-down': {
+        'en': 'Failed to stop container',
+        'zh': '停止 docker 容器失败'
+    },
+    'fail-to-remove-dir': {
+        'en': 'Failed to remove safeline installation directory',
+        'zh': '删除雷池安装目录失败'
+    },
+    'uninstall-finish': {
+        'en': 'SafeLine WAF uninstall completed',
+        'zh': '雷池 WAF 卸载完成'
+    },
+    'docker-down': {
+        'en': 'Stopping SafeLine WAF container',
+        'zh': '正在停止雷池 WAF 容器'
+    },
+    'reset-tengine': {
+        'en': 'RESET TENGINE CONFIG',
+        'zh': '重置 tengine 配置',
+    },
+    'reset-postgres': {
+        'en': 'RESET DATABASE PASSWORD',
+        'zh': '重置数据库密码'
+    },
+    'fail-to-find-nginx': {
+        'en': 'Failed to find tengine config path',
+        'zh': '未找到 tengine 配置目录'
+    },
+    'nginx-backup-dir': {
+        'en': 'Tengine config backup directory',
+        'zh': 'tengine 配置备份目录'
+    },
+    'fail-to-backup-nginx': {
+        'en': 'Failed to backup tengine config',
+        'zh': '备份 tengine 目录失败'
+    },
+    'docker-restart': {
+        'en': 'Restart docker container',
+        'zh': '重启 docker 容器'
+    },
+    'docker-exec': {
+        'en': 'Executing docker command',
+        'zh': '执行 docker 命令'
+    },
+    'fail-to-recover-static': {
+        'en': 'Failed to recover tengine static config',
+        'zh': '恢复 tengine 静态站点资源失败'
+    },
+    'fail-to-find-env': {
+        'en': 'Failed to find .env file',
+        'zh': '未找到 .env 文件'
+    },
+    'fail-to-find-postgres-password': {
+        'en': 'Failed to find postgres password',
+        'zh': '未找到数据库密码'
+    },
+    'fail-to-reset-postgres-password': {
+        'en': 'Failed to reset postgres password',
+        'zh': '重置数据库密码失败'
+    },
+    'reset-postgres-password-finish': {
+        'en': 'Reset postgres password completed',
+        'zh': '重置数据库密码完成'
+    },
+    'reset-tengine-finish': {
+        'en': 'Reset tengine finish completed',
+        'zh': '重置 tengine 配置完成'
+    },
+    'if-remove-waf': {
+        'en': 'Do you want to uninstall SafeLine WAF, this operation will delete all data in the directory',
+        'zh': '是否确认卸载雷池，该操作会删除目录下所有数据'
+    },
+    'restart-docker-finish': {
+        'en': 'Restart SafeLine WAF docker container completed',
+        'zh': '重启雷池 WAF 容器完成'
+    },
+    'restart': {
+        'en': 'RESTART',
+        'zh': '重启'
     }
-
 }
 
 
@@ -313,6 +412,7 @@ LTS = False
 IMAGE_CLEAN = False
 EN = False
 INSTALL = False
+DOMAIN = 'waf-ce.chaitin.cn'
 
 def color(t, attrs=[], end=True):
     t = '\x1B[%sm%s' % (';'.join([str(i) for i in attrs]), t)
@@ -447,7 +547,7 @@ def free_memory():
 
 def exec_command(*args,shell=False):
     try:
-        proc = subprocess.run(args, check=False, capture_output=True, universal_newlines=True,shell=shell)
+        proc = subprocess.run(args, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,shell=shell)
         subprocess_output(proc.stdout.strip())
         return proc.returncode, proc.stdout, proc.stderr
     except Exception as e:
@@ -501,7 +601,7 @@ def install_docker():
     log.info(text('install-docker'))
 
     log.debug("downloading get-docker.sh")
-    if not save_file_from_url('https://waf-ce.chaitin.cn/release/latest/get-docker.sh','get-docker.sh'):
+    if not save_file_from_url('https://'+DOMAIN+'/release/latest/get-docker.sh','get-docker.sh'):
         raise Exception(text('fail-to-download-docker-installation'))
 
     source = docker_source()
@@ -554,7 +654,7 @@ def precheck_docker_compose():
                 log.warning(text('docker-compose-not-installed'))
 
         if version_output != '':
-            t = re.findall(r'^Docker Compose version v(\d+)\.', version_output)
+            t = re.findall(r'^Docker Compose version v?(\d+)\.', version_output)
             if len(t) == 0:
                 log.warning(text('docker-compose-not-installed'))
             elif int(t[0]) < 2:
@@ -608,7 +708,6 @@ def precheck():
                 log.warning(text('install-docker-failed'))
                 return False
 
-    log.info(text("docker-compose-version"))
     if not precheck_docker_compose():
         return False
             
@@ -621,6 +720,24 @@ def docker_pull(cwd):
         return True
     except Exception as e:
         log.warning("docker pull error: "+str(e))
+        return False
+
+def docker_restart(container):
+    log.info(text('docker-restart')+": "+container)
+    try:
+        subprocess.check_call('docker restart '+container, shell=True)
+        return True
+    except Exception as e:
+        log.error("docker restart error: "+str(e))
+        return False
+
+def docker_exec(container, command):
+    log.info(text('docker-exec')+": ("+container+") "+command)
+    try:
+        subprocess.check_call('docker exec '+container+' '+command, shell=True)
+        return True
+    except Exception as e:
+        log.error("docker exec error: "+str(e))
         return False
 
 def image_clean():
@@ -649,6 +766,14 @@ def docker_up(cwd):
                     return False
         else:
             log.error("docker up error: "+p[2])
+
+def docker_down(cwd):
+    log.info(text('docker-down'))
+    try:
+        subprocess.check_call(compose_command+' down', cwd=cwd, shell=True)
+        return True
+    except Exception:
+        return False
 
 def get_url_time(url):
     now = datetime.datetime.now()
@@ -711,6 +836,19 @@ def docker_source():
             source = v
     return source
 
+def read_config(path,config):
+    with open(path, 'r') as f:
+        for line in f.readlines():
+            if line.strip() == '':
+                continue
+            try:
+                s = line.index('=')
+                if s > 0:
+                    k = line[:s].strip()
+                    v = line[s + 1:].strip()
+                    config[k] = v
+            except ValueError:
+                continue
 
 def generate_config(path):
     log.info(text('update-config'))
@@ -719,6 +857,7 @@ def generate_config(path):
         'POSTGRES_PASSWORD': '',
         'MGT_PORT': '',
         'RELEASE': '',
+        'CHANNEL': '',
         'REGION': '',
         'IMAGE_PREFIX': '',
         'IMAGE_TAG': '',
@@ -728,13 +867,7 @@ def generate_config(path):
 
     env_path = os.path.join(path,'.env')
     if os.path.exists(env_path):
-        with open(env_path, 'r') as f:
-            for line in f.readlines():
-                s = line.index('=')
-                if s > 0:
-                    k = line[:s].strip()
-                    v = line[s + 1:].strip()
-                    config[k] = v
+        read_config(env_path,config)
 
     if config['ARCH_SUFFIX'] == '':
         if platform.machine() == 'aarch64':
@@ -748,6 +881,7 @@ def generate_config(path):
 
     if config['RELEASE'] == '' and LTS:
         config['RELEASE'] = '-lts'
+        config['CHANNEL'] = '-lts'
 
     default_try = False
     if config['MGT_PORT'] == '9443':
@@ -833,16 +967,11 @@ def install():
     log.info(text('remain-disk-capacity', (safeline_path, humen_size(free_space(safeline_path)))))
 
     log.info(text('download-compose'))
-    if not save_file_from_url('https://waf-ce.chaitin.cn/release/latest/compose.yaml',os.path.join(safeline_path, 'docker-compose.yaml')):
+    if not save_file_from_url('https://'+DOMAIN+'/release/latest/compose.yaml',os.path.join(safeline_path, 'docker-compose.yaml')):
         log.error(text('fail-to-download-compose'))
         return
     if os.path.exists(os.path.join(safeline_path, 'compose.yaml')):
         os.rename(os.path.join(safeline_path, 'compose.yaml'),os.path.join(safeline_path, 'compose.yaml.bak'))
-
-    log.info(text('download-reset-tengine'))
-    if not save_file_from_url('https://waf-ce.chaitin.cn/release/latest/reset_tengine.sh',safeline_path + '/reset_tengine.sh'):
-        log.error(text('fail-to-download-reset-tengine'))
-        return
 
     while True:
         config = generate_config(safeline_path)
@@ -886,23 +1015,17 @@ def save_file_from_url(url, path):
 def upgrade():
     safeline_path = get_installed_dir()
 
-    log.info(text("docker-compose-version"))
     if not precheck_docker_compose():
         log.error(text('precheck-failed'))
         return
 
     log.info(text('download-compose'))
-    if not save_file_from_url('https://waf-ce.chaitin.cn/release/latest/compose.yaml', os.path.join(safeline_path, 'docker-compose.yaml')):
+    if not save_file_from_url('https://'+DOMAIN+'/release/latest/compose.yaml', os.path.join(safeline_path, 'docker-compose.yaml')):
         log.error(text('fail-to-download-compose'))
         return
 
     if os.path.exists(os.path.join(safeline_path, 'compose.yaml')):
         os.rename(os.path.join(safeline_path, 'compose.yaml'),os.path.join(safeline_path, 'compose.yaml.bak'))
-
-    log.info(text('download-reset-tengine'))
-    if not save_file_from_url('https://waf-ce.chaitin.cn/release/latest/reset_tengine.sh',safeline_path + '/reset_tengine.sh'):
-        log.error(text('fail-to-download-reset-tengine'))
-        return
 
     while True:
         config = generate_config(safeline_path)
@@ -924,31 +1047,146 @@ def upgrade():
     show_address(config['MGT_PORT'])
     pass
 
+def reset_tengine():
+    safeline_path = get_installed_dir()
+    resources_path = os.path.join(safeline_path, 'resources')
+    nginx_path = os.path.join(resources_path,'nginx')
+    if not os.path.exists(nginx_path):
+        log.error(text('fail-to-find-nginx'))
+        return
+    backup_path = os.path.join(resources_path, 'nginx.'+str(datetime.datetime.now().timestamp()))
+    log.info(text('nginx-backup-dir') +': '+ backup_path)
+    try:
+        shutil.move(nginx_path, backup_path)
+    except Exception as e:
+        log.error(text('fail-to-backup-nginx')+': '+str(e))
+        return
+
+    if docker_restart('safeline-tengine'):
+        docker_exec('safeline-mgt', 'gentenginewebsite')
+
+    if os.path.exists(os.path.join(backup_path, 'static')):
+        try:
+            shutil.copy(os.path.join(backup_path, 'static'), os.path.join(nginx_path, 'static'))
+        except Exception as e:
+            log.error(text('fail-to-recover-static')+': '+str(e))
+            return
+
+    log.info(text('reset-tengine-finish'))
+
+def docker_restart_all(cwd):
+    if not docker_down(cwd):
+        log.error(text('fail-to-down'))
+        return False
+
+    if not docker_up(cwd):
+        log.error(text('fail-to-up'))
+        return False
+
+    return True
+
+def reset_postgres():
+    safeline_path = get_installed_dir()
+
+    if not precheck_docker_compose():
+        log.error(text('precheck-failed'))
+        return
+
+    env_file = os.path.join(safeline_path, '.env')
+    if not os.path.exists(env_file):
+        log.error(text('fail-to-find-env'))
+        return
+
+    config = {}
+    read_config(env_file, config)
+    if config['POSTGRES_PASSWORD'] == '':
+        log.error(text('fail-to-find-postgres-password'))
+        return
+
+    if not docker_exec('safeline-pg','psql -U safeline-ce -c "ALTER USER \\"safeline-ce\\" WITH PASSWORD \''+config['POSTGRES_PASSWORD']+'\';"'):
+        log.error(text('fail-to-reset-postgres-password'))
+        return
+
+    action = ui_choice(text('if-restart-docker'), [
+        ('y', text('yes')),
+        ('n', text('no')),
+    ])
+
+    if action.lower() == 'y':
+        if not docker_restart_all(safeline_path):
+            return
+
+    log.info(text('reset-postgres-password-finish'))
+
 def repair():
-    pass
+    action = ui_choice(text('choice-action'),[
+        ('1', text('reset-tengine')),
+        ('2', text('reset-postgres')),
+    ])
+
+    if action =='1':
+        reset_tengine()
+    elif action =='2':
+        reset_postgres()
+
+def restart():
+    safeline_path = get_installed_dir()
+
+    if not precheck_docker_compose():
+        log.error(text('precheck-failed'))
+        return
+
+    if not docker_restart_all(safeline_path):
+        return
+
+    log.info(text('restart-docker-finish'))
 
 def backup():
     pass
 
+def uninstall():
+    safeline_path = get_installed_dir()
+
+    action = ui_choice(text('if-remove-waf')+": "+safeline_path,[
+        ('y', text('yes')),
+        ('n', text('no')),
+    ])
+
+    if action == 'n':
+        return
+
+    if not precheck_docker_compose():
+        log.error(text('precheck-failed'))
+        return
+
+    if not docker_down(safeline_path):
+        log.error(text('fail-to-docker-down'))
+        return
+
+    try:
+        shutil.rmtree(safeline_path)
+    except Exception as e:
+        log.debug("remove dir failed: "+str(e))
+        log.error(text('fail-to-remove-dir'))
+
+    log.info(text('uninstall-finish'))
+
 def init_global_config():
-    global lang
+    global lang, DEBUG, LTS, IMAGE_CLEAN, EN, DOMAIN
     lang = 'zh'
     if '--debug' in sys.argv:
-        global DEBUG
         DEBUG = True
 
     if '--lts' in sys.argv:
-        global LTS
         LTS = True
 
     if '--image-clean' in sys.argv:
-        global IMAGE_CLEAN
         IMAGE_CLEAN = True
 
     if '--en' in sys.argv:
-        global EN
         EN = True
         lang = 'en'
+        DOMAIN = 'waf.chaitin.com'
 
 def main():
     init_global_config()
@@ -957,6 +1195,9 @@ def main():
     log.info(text('hello1'))
     log.info(text('hello2'))
     print()
+
+    if LTS:
+        log.info(text('install-channel')+": "+text('lts-release'))
 
     if sys.version_info.major == 2 or (sys.version_info.major == 3 and sys.version_info.minor <= 5):
         log.error(text('python-version-too-low'))
@@ -982,7 +1223,9 @@ def main():
     action = ui_choice(text('choice-action'), [
         ('1', text('install')),
         ('2', text('upgrade')),
-        # ('3', text('repair')),
+        ('3', text('uninstall')),
+        ('4', text('repair')),
+        ('5', text('restart')),
         # ('4', text('backup'))
     ])
 
@@ -990,8 +1233,12 @@ def main():
         install()
     elif action == '2':
         upgrade()
-    # elif action == '3':
-    #     repair()
+    elif action == '3':
+        uninstall()
+    elif action == '4':
+        repair()
+    elif action == '5':
+        restart()
     # elif action == '4':
     #     backup()
 
